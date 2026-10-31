@@ -1,0 +1,26 @@
+{
+  "version": "2026-10-31.1",
+  "routes": [
+    {
+      "id": "preparation_only_v1",
+      "locations": ["hyderabad", "bengaluru"],
+      "employment_coverage": "Not assessed. City alone does not determine jurisdiction or eligibility.",
+      "purpose": "Prepare a factual wage account for the worker to review with the appropriate office.",
+      "exclusions": ["Not a statutory wage-claim determination", "No government submission, status synchronization, or guaranteed recovery"],
+      "official_url": "https://samadhan.labour.gov.in/",
+      "submission_method": "Worker-initiated external site only after confirming the appropriate current route and eligibility",
+      "form_fields": [],
+      "preparation_fields": ["Worker name", "Employer name and workplace address", "Work period", "Employment type", "Confirmed wage account", "Desired action"],
+      "required_documents": [],
+      "optional_documents": ["Reviewed wage account", "Payment history", "Supporting messages and attendance, if available"],
+      "sources": [
+        {"url": "https://samadhan.labour.gov.in/", "finding": "Current landing page is a JavaScript application; live authenticated filing form was not verified."},
+        {"url": "https://reportsamadhan.labour.gov.in/faqs/", "finding": "Legacy guidance directs fresh Labour Code cases to Samadhan 2.0. Older Act-specific manuals do not establish current eligibility."},
+        {"url": "https://labour.gov.in/sites/default/files/pib2038690.pdf", "finding": "Historical Ministry description only; not used to determine current legal applicability."}
+      ],
+      "verification_date": "2026-10-31",
+      "verification_status": "preparation_only_live_form_and_coverage_unverified",
+      "guided_filing_available": false
+    }
+  ]
+}

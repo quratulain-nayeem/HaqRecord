@@ -1,0 +1,4 @@
+Bolna Web Call SDK v3.0.1
+https://github.com/bolna-ai/web-call
+https://cdn.jsdelivr.net/gh/bolna-ai/web-call@v3.0.1/dist/bolna-web-call.min.js
+SHA256 85242481ba962e225cb2052de55a80579e469ff548082bb1ad4040b3f1556c46

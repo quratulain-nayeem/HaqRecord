@@ -1,0 +1,15 @@
+# Prepare-case authentication repair — 31 October 2026
+
+The latest reviewed call successfully captured notes, calculated a reported balance, accepted a rate correction and recalculated. Its final `prepare_case` request was rejected by the callback bridge with HTTP 401 / `Invalid voice tool credential`. That rejection occurs before case preparation; it was not a database-write error or a missing worker detail.
+
+A read-only audit of the published agent found only `prepare_case` had an authentication value that did not match the server’s callback secret. Other enabled callbacks matched. The source of that mismatch is not established. The guard previously checked callback URLs but did not compare their authentication values; that was a gap.
+
+`repair_voice_tool_auth.py --apply` updated the mismatched value using the existing server secret and verified the provider’s read-back. It did not rotate the secret, weaken `require_tool`, modify other agent settings, change facts, or save a worker case. Its default mode is read-only. A private rollback snapshot is under `.tools/agent-before-callback-auth-*.json`; no secret values are printed.
+
+`voice_agent_guard.py`, `voice.py`, and `voice_backend.py` now validate callback authentication during readiness and forced session checks. A mismatch blocks the next session mint rather than allowing a call to reach a broken save tool. Token comparison is server-side and readiness returns no credential values.
+
+The same call also exposed a quantity integrity problem: the notes contained a numeric week count while explicitly asking how many weeks the month covered. `intake_progress.py` now treats that contradiction as unresolved. `capture_account` keeps the value only as an unconfirmed candidate, clears the effective quantity and asks for the matching-unit quantity. Calculation and preparation reject that candidate until clarified; a calendar month is not silently converted to four weeks. Existing worker-confirmed case data was not rewritten.
+
+Validation: `tests/test_voice_save_path.py` uses fictional temporary databases to reproduce the rejected credential, verify the targeted repair preserves unrelated settings, block an unresolved candidate, accept a new explicitly confirmed quantity, prepare a draft, and save it once through browser approval plus PIN. Intake-progress, early-account, agent-guard and connected voice-backend regression tests also passed. A real callback probe with the repaired authentication and an intentionally invalid call capability reached the capability check and safely rejected it, without staging a case.
+
+Saving boundary: `prepare_case` prepares a draft; spoken consent alone is not a saved case. The worker reviews the exact account, privately enters a PIN and approves saving in the browser. Sara must describe that boundary and may claim saved only after a successful persisted result. The reviewed call did not save a case. Its inferred quantity must be checked rather than treated as an independently confirmed fact.
