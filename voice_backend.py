@@ -124,7 +124,7 @@ class StartIntake(BaseModel):
 def start_intake(data:StartIntake,request:Request,response:Response):
     worker.check_json_origin(request)
     config=voice.settings()
-    extra=dotenv_values(Path(__file__).resolve().parent/'.env')
+    extra={**os.environ,**{k:v for k,v in dotenv_values(Path(__file__).resolve().parent/'.env').items() if v}}
     if not config.get('BOLNA_API_KEY') or not config.get('BOLNA_AGENT_ID'):
         raise HTTPException(503,'Bolna is not configured')
     if not extra.get('HAQRECORD_VOICE_PUBLIC_URL'):

@@ -11,13 +11,14 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from pwdlib import PasswordHash
+from memory_budget import BoundedPasswordHash
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / '.env')
 AUTH_DB = Path(os.getenv('HAQRECORD_AUTH_DB_PATH') or str(ROOT / 'auth.db'))
 COOKIE = 'haqrecord_demo_session' if os.getenv('HAQRECORD_DEMO')=='true' else 'haqrecord_session'
 SESSION_SECONDS = 8 * 60 * 60
-PASSWORDS = PasswordHash.recommended()  # Argon2id; includes a random salt.
+PASSWORDS = BoundedPasswordHash(PasswordHash.recommended())  # Same Argon2id strength; bounded peak RAM.
 DUMMY_HASH = PASSWORDS.hash(secrets.token_urlsafe(32))
 router = APIRouter(prefix='/auth', tags=['Authentication'])
 

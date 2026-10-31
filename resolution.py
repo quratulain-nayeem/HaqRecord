@@ -24,6 +24,7 @@ from dotenv import dotenv_values
 import auth
 import database
 import worker
+from memory_budget import memory_heavy,single_source_job
 import resolution_store as store
 from case_service import read_case_record
 from case_workspace_service import fingerprint
@@ -199,6 +200,16 @@ class Upload(Model):
     consent_to_store: Literal[True]
 
 
+@memory_heavy
+def extract_source(mime,content,language):
+    task={'mime':mime,'content_base64':base64.b64encode(content).decode(),'language':language}
+    completed=subprocess.run([sys.executable,'-B',str(Path(__file__).with_name('extract_reply_worker.py'))],
+        input=json.dumps(task).encode('utf-8'),capture_output=True,timeout=50,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,check=True)
+    return json.loads(completed.stdout.decode('utf-8'))
+
+
+@single_source_job
 def process_source(source_id,language):
     # BackgroundTasks runs this in a bounded synchronous worker thread. Original
     # remains available if a provider fails; failure never changes case finances.
@@ -208,11 +219,10 @@ def process_source(source_id,language):
         mime,content=row['mime'],row['content']
     started=time.monotonic()
     try:
-        task={'mime':mime,'content_base64':base64.b64encode(content).decode(),'language':language}
-        completed=subprocess.run([sys.executable,'-B',str(Path(__file__).with_name('extract_reply_worker.py'))],
-            input=json.dumps(task).encode('utf-8'),capture_output=True,timeout=50,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,check=True)
-        processed=json.loads(completed.stdout.decode('utf-8'));result=processed['result'];status=processed['status']
+        # Release the memory gate BEFORE writing to SQLite: retrying case saves
+        # can verify their PIN inside a transaction, and must not deadlock with
+        # an extraction trying to write its result.
+        processed=extract_source(mime,content,language);result=processed['result'];status=processed['status']
     except Exception:
         # Provider responses and source contents are deliberately absent from logs.
         result={'notice':'Extraction failed. The original is stored; retry or paste a readable transcript.'}

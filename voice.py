@@ -45,7 +45,7 @@ def callback_available(url):
 @router.get('/status')
 def voice_status():
     values = settings()
-    extra=dotenv_values(Path(__file__).resolve().parent / '.env')
+    extra={**os.environ,**{k:v for k,v in dotenv_values(Path(__file__).resolve().parent / '.env').items() if v}}
     public=extra.get('HAQRECORD_VOICE_PUBLIC_URL')
     secret=extra.get('HAQRECORD_VOICE_TOOL_SECRET')
     agent_check=check_agent(values,public,tool_secret=secret) if secret else {'ready':False,'status':'not_configured'}
@@ -56,7 +56,7 @@ def voice_status():
         'agent_configuration': agent_check['status'],
         'agent_warnings': agent_check.get('warnings',[]),
         'mode': 'backend_intake',
-        'backend_connected': callback_available(dotenv_values(Path(__file__).resolve().parent / '.env').get('HAQRECORD_VOICE_PUBLIC_URL')),
+        'backend_connected': callback_available(public),
         'requires_browser_save_approval': True,
         'cases_are_saved': False,
         'max_duration_seconds': None,

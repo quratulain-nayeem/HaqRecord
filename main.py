@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from memory_budget import BoundedUploads
 
 from auth import browser_session, require_case_access, router as auth_router
 from case_models import CaseCreate, PaymentCreate, WageCalculation
@@ -16,6 +17,7 @@ from resolution import router as resolution_router, public_router as recipient_r
 import resolution_voice  # Registers browser confirmation before routers are included.
 
 app = FastAPI(title='HaqRecord')
+app.add_middleware(BoundedUploads)
 UI_ROOT = Path(__file__).resolve().parent / 'web'
 from research import router as resource_router
 app.include_router(resource_router)

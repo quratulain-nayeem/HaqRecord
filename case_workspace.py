@@ -1,7 +1,7 @@
 """Browser-only case evidence, corrections, packets and in-app reminders."""
 import base64
 import binascii
-import io
+import tempfile
 import json
 import sqlite3
 import zipfile
@@ -13,7 +13,8 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 import database
@@ -213,22 +214,33 @@ def packet(session=Depends(worker.require_worker)):
     html+='<h2>Supporting material</h2>'+table(['Source ID','Filename','Description','SHA-256','Fictional demo material'],[[s['source_id'],s['filename'],s['description'],s['sha256'],s['fictional']] for s in w['sources']])
     html+='<h2>Follow-up reminders (in-app only)</h2>'+table(['Time (with offset)','Action','Status'],[[r['due_at'],r['action'],r['state']] for r in w['reminders']])
     html+='<h2>Next useful question</h2><p>'+esc(w['next_question'])+'</p><p>Reminders are shown when this case is opened. Outbound calls and external submissions are not connected.</p></html>'
-    buffer=io.BytesIO()
-    with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as archive:
-        from resolution import packet as resolution_packet
-        archive.writestr('resolution-report.html',resolution_packet(session).body)
-        archive.writestr('case-packet.html',html)
-        archive.writestr('case-record.json',json.dumps(record,ensure_ascii=False,indent=2))
-        from next_steps import case_next_step
-        help_step=case_next_step(record,'en')
-        help_text=help_step['summary']+'\n\nNo government complaint submitted. Worker-reported account, not a legal finding.'
-        if help_step['resource_card']:
-            card=help_step['resource_card'];help_text+='\n\n'+card['display_name']+'\n'+card['what_to_say']+'\n'+card['notice']+'\nSource: '+card['url']
-        archive.writestr('help-summary.txt',help_text)
-        with closing(sqlite3.connect(database.DB_PATH)) as db:
-            for source,filename,content in db.execute('SELECT source_id,filename,content FROM case_evidence WHERE case_id=?',(session['case_id'],)):
-                archive.writestr('supporting-material/'+source+'-'+filename,content)
-            from case_workspace_service import safe_filename
-            for source,filename,content in db.execute('SELECT source_id,filename,content FROM reply_sources WHERE case_id=?',(session['case_id'],)):
-                archive.writestr('reply-originals/'+source+'-'+safe_filename(filename),content)
-    return Response(buffer.getvalue(),media_type='application/zip',headers={'Content-Disposition':f'attachment; filename="{record["case_id"]}-packet.zip"'})
+    # Archives can contain over 100 MB of originals. Spill to a private temporary
+    # file after 1 MB, then stream chunks instead of copying the entire ZIP.
+    buffer=tempfile.SpooledTemporaryFile(max_size=1024*1024,mode='w+b')
+    try:
+        with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as archive:
+            from resolution import packet as resolution_packet
+            archive.writestr('resolution-report.html',resolution_packet(session).body)
+            archive.writestr('case-packet.html',html)
+            archive.writestr('case-record.json',json.dumps(record,ensure_ascii=False,indent=2))
+            from next_steps import case_next_step
+            help_step=case_next_step(record,'en')
+            help_text=help_step['summary']+'\n\nNo government complaint submitted. Worker-reported account, not a legal finding.'
+            if help_step['resource_card']:
+                card=help_step['resource_card'];help_text+='\n\n'+card['display_name']+'\n'+card['what_to_say']+'\n'+card['notice']+'\nSource: '+card['url']
+            archive.writestr('help-summary.txt',help_text)
+            with closing(sqlite3.connect(database.DB_PATH)) as db:
+                for source,filename,content in db.execute('SELECT source_id,filename,content FROM case_evidence WHERE case_id=?',(session['case_id'],)):
+                    archive.writestr('supporting-material/'+source+'-'+filename,content)
+                from case_workspace_service import safe_filename
+                for source,filename,content in db.execute('SELECT source_id,filename,content FROM reply_sources WHERE case_id=?',(session['case_id'],)):
+                    archive.writestr('reply-originals/'+source+'-'+safe_filename(filename),content)
+        length=buffer.tell();buffer.seek(0)
+    except BaseException:
+        buffer.close();raise
+    def chunks():
+        try:
+            while chunk:=buffer.read(64*1024):yield chunk
+        finally:buffer.close()
+    return StreamingResponse(chunks(),media_type='application/zip',background=BackgroundTask(buffer.close),
+        headers={'Content-Disposition':f'attachment; filename="{record["case_id"]}-packet.zip"','Content-Length':str(length)})
