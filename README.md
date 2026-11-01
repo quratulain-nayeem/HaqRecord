@@ -8,6 +8,9 @@ A worker can speak in Hindi or English, explain what happened, check the informa
 
 **HaqRecord helps workers prepare and maintain their account. It does not automatically file a government complaint, independently verify every statement, or guarantee wage recovery.**
 
+## Try HaqRecord
+
+**Live website: https://quratulain-nayeem.alwaysdata.net**
 ---
 
 ## Why this project exists
